@@ -1,3 +1,5 @@
+# spiral_memory.py — Symbolic Memory Core for SpiralOS
+
 import json
 import os
 from datetime import datetime
@@ -39,8 +41,11 @@ def log_to_journal(glyph, fidelity, entropy):
         json.dump(journal, f, indent=2)
 
 def advance_state(memory):
+    # Full cycle: ∅ ⧖ ⟲ Ψ
     glyph_cycle = ["∅", "⧖", "⟲", "Ψ"]
     current = memory["current_glyph"]
+    if current not in glyph_cycle:
+        current = "∅"  # Reset if unknown
     next_index = (glyph_cycle.index(current) + 1) % len(glyph_cycle)
     next_glyph = glyph_cycle[next_index]
     memory["current_glyph"] = next_glyph
