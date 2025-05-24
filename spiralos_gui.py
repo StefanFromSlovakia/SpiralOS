@@ -5,34 +5,31 @@ import json
 import os
 from spiral_memory import load_memory, advance_state, log_to_journal
 import modules.quantum_glyph_simulator as qgs
+import transmission_kernel as tkernel
 
 class SpiralOSGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("SpiralOS GUI")
         self.angle_offset = 0.0
+        self.auto_transmit = tk.BooleanVar(value=True)
+        self.auto_respond = tk.BooleanVar(value=False)
 
-        # Layout Frame
         self.frame = tk.Frame(root, bg="black")
         self.frame.pack(fill="both", expand=True)
 
-        # Spiral Canvas
         self.canvas = tk.Canvas(self.frame, width=400, height=400, bg="black", highlightthickness=0)
         self.canvas.pack()
 
-        # Glyph trail / history
         self.label = tk.Label(self.frame, text="", fg="white", bg="black", font=("Courier", 10))
         self.label.pack(fill="x", pady=(0, 4))
 
-        # Console log
         self.console = tk.Text(self.frame, height=5, bg="black", fg="white", insertbackground="white", font=("Courier", 9))
         self.console.pack(fill="x")
 
-        # Status bar
         self.status = tk.Label(self.frame, text="Y: N/A   |   Fidelity: N/A", fg="white", bg="black", font=("Courier", 10))
         self.status.pack(fill="x", pady=(4, 4))
 
-        # Buttons
         self.button_frame = tk.Frame(self.frame, bg="black")
         self.button_frame.pack(fill="x", pady=(0, 5))
 
@@ -41,7 +38,13 @@ class SpiralOSGUI:
         tk.Button(self.button_frame, text="🧠 Journal", command=self.view_journal).pack(side="left", padx=5)
         tk.Button(self.button_frame, text="∅ Exit", command=self.root.quit).pack(side="right", padx=5)
 
-        # Start
+        # Toggles
+        self.toggle_frame = tk.Frame(self.frame, bg="black")
+        self.toggle_frame.pack(fill="x")
+
+        tk.Checkbutton(self.toggle_frame, text="📡 Auto Transmit", variable=self.auto_transmit, bg="black", fg="white", selectcolor="black").pack(side="left", padx=10)
+        tk.Checkbutton(self.toggle_frame, text="🔁 Auto Respond", variable=self.auto_respond, bg="black", fg="white", selectcolor="black").pack(side="left")
+
         self.memory = load_memory()
         self.update_glyph(self.memory["current_glyph"])
         self.animate_spiral()
@@ -71,6 +74,16 @@ class SpiralOSGUI:
         glyph = self.memory["current_glyph"]
         result = qgs.simulate_quantum_behavior(mass_0=1e31, recursion_depths=[100])[0]
         log_to_journal(glyph, result["Fidelity"], result["γ"])
+
+        if self.auto_transmit.get():
+            packet = tkernel.encode_packet(glyph, result["γ"], result["Fidelity"], message="Simulation result")
+            tkernel.transmit_packet(packet)
+
+        if self.auto_respond.get():
+            reply = tkernel.respond_to_last()
+            if reply:
+                self.console.insert(tk.END, f"↩ Response: {reply['message']} (F={reply['fidelity']}, Y={reply['entropy']})\n")
+
         next_glyph = advance_state(self.memory)
         self.update_glyph(next_glyph)
         self.label.config(text=" ".join(self.memory["history"][-12:]))
