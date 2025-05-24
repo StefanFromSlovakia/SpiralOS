@@ -1,69 +1,156 @@
 import tkinter as tk
-import simpleaudio as sa
-import threading
-import math
-from audio import SafeAudioPlayer
+from tkinter import ttk
+import numpy as np
+import os
+import json
 
-# Initialize audio player
-audio = SafeAudioPlayer()
+from spiral_memory import load_memory, advance_state, log_to_journal, save_memory
+import modules.quantum_glyph_simulator as qgs
+import transmission_kernel as tkernel
 
-class SpiralApp:
+try:
+    import simpleaudio as sa
+    AUDIO_ENABLED = True
+    SOUND_ENABLED = True
+except ImportError:
+    AUDIO_ENABLED = False
+    SOUND_ENABLED = False
+
+
+class SpiralOSGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("SpiralOS GUI")
-        self.canvas = tk.Canvas(root, width=600, height=600, bg='black')
-        self.canvas.pack()
+        root.title("SpiralOS")
+        self.memory = load_memory()
 
-        self.angle = 0
-        self.spiral_id = None
+        # Canvas
+        self.canvas = tk.Canvas(root, width=400, height=400, bg="black")
+        self.canvas.pack(pady=10)
 
-        self.play_button = tk.Button(root, text="Play Spiral", command=self.start_spiral)
-        self.play_button.pack(side=tk.LEFT, padx=10, pady=10)
+        # Glyph label
+        self.label = ttk.Label(root, text="Symbol History")
+        self.label.pack()
 
-        self.stop_button = tk.Button(root, text="Stop Spiral", command=self.stop_spiral)
-        self.stop_button.pack(side=tk.LEFT, padx=10, pady=10)
+        # Status label
+        self.status = ttk.Label(root, text="Y: - | Fidelity: - | Stability: -")
+        self.status.pack()
 
-        self.silent_var = tk.IntVar()
-        self.silent_check = tk.Checkbutton(root, text="Silent Mode", variable=self.silent_var, command=self.toggle_silent_mode)
-        self.silent_check.pack(side=tk.LEFT, padx=10, pady=10)
+        # Console text box
+        self.console = tk.Text(root, height=10, width=60)
+        self.console.pack(pady=10)
 
-    def toggle_silent_mode(self):
-        if self.silent_var.get():
-            audio.enable_silent_mode()
-        else:
-            audio.disable_silent_mode()
+        # Control buttons
+        self.simulate_button = ttk.Button(root, text="Ψ Simulate", command=self.simulate)
+        self.simulate_button.pack(side="left", padx=5, pady=5)
 
-    def draw_spiral(self):
+        self.journal_button = ttk.Button(root, text="🧠 Journal", command=self.view_journal)
+        self.journal_button.pack(side="left", padx=5, pady=5)
+
+        self.transmit_toggle = ttk.Button(root, text="⇄ Auto TX", command=self.toggle_transmit)
+        self.transmit_toggle.pack(side="left", padx=5, pady=5)
+
+        self.respond_toggle = ttk.Button(root, text="↺ Auto RX", command=self.toggle_respond)
+        self.respond_toggle.pack(side="left", padx=5, pady=5)
+
+        self.exit_button = ttk.Button(root, text="∅ Exit", command=self.on_exit)
+        self.exit_button.pack(side="right", padx=5, pady=5)
+
+        # Initialize spiral + glyph
+        self.update_glyph(self.memory["current_glyph"])
+
+    def draw_spiral(self, glyph):
         self.canvas.delete("all")
-        center_x, center_y = 300, 300
-        points = []
-        for i in range(100):
-            angle = self.angle + i * 0.1
-            radius = 5 * i
-            x = center_x + radius * math.cos(angle)
-            y = center_y + radius * math.sin(angle)
-            points.append((x, y))
-        for i in range(len(points) - 1):
-            self.canvas.create_line(points[i], points[i+1], fill='cyan', width=2)
-        self.angle += 0.1
-        self.spiral_id = self.root.after(50, self.draw_spiral)
+        cx, cy = 200, 200
+        r_max = 90
+        angle_shift = {"∅": 0.0, "⧖": 0.1, "⟲": 0.2, "Ψ": 0.4}.get(glyph, 0.0)
+        for i in range(150):
+            angle = angle_shift + 0.3 * i
+            r = r_max * i / 150
+            x = cx + r * np.cos(angle)
+            y = cy + r * np.sin(angle)
+            self.canvas.create_oval(x, y, x + 1.5, y + 1.5, fill="white", outline="")
+        self.canvas.create_text(cx, cy, text=glyph, fill="cyan", font=("Courier", 36, "bold"), tags="glyph")
 
-    def start_spiral(self):
-        self.stop_spiral()
-        self.draw_spiral()
-        try:
-            wave_obj = sa.WaveObject.from_wave_file("sounds/spiral.wav")
-            audio.play(wave_obj)
-        except Exception as e:
-            print(f"[GUI] Failed to play sound: {e}")
+    def update_glyph(self, glyph):
+        self.draw_spiral(glyph)
+        self.canvas.delete("glyph")
+        cx, cy = 200, 200
+        self.canvas.create_text(cx, cy, text=glyph, fill="cyan", font=("Courier", 36, "bold"), tags="glyph")
 
-    def stop_spiral(self):
-        if self.spiral_id:
-            self.root.after_cancel(self.spiral_id)
-            self.spiral_id = None
-        audio.stop()
+    def play_tone(self, frequency=440.0, duration=0.3):
+        if AUDIO_ENABLED:
+            try:
+                fs = 44100
+                t = np.linspace(0, duration, int(fs * duration), False)
+                tone = np.sin(frequency * 2 * np.pi * t)
+                audio = (tone * 32767).astype(np.int16)
+                sa.play_buffer(audio, 1, 2, fs)
+            except Exception as e:
+                self.console.insert(tk.END, f"Audio error: {e}\n")
+                self.console.see(tk.END)
 
-if __name__ == '__main__':
+    def simulate(self):
+        glyph = self.memory["current_glyph"]
+        result = qgs.simulate_quantum_behavior(mass_0=1e31, recursion_depths=[100])[0]
+        log_to_journal(glyph, result["Fidelity"], result["γ"])
+
+        if AUDIO_ENABLED:
+            pitch = 200 + 800 * result["γ"]
+            self.play_tone(frequency=pitch)
+
+        if tkernel.TRANSMISSION_STATE["auto_transmit"]:
+            packet = tkernel.encode_packet(glyph, result["γ"], result["Fidelity"], message="Symbol Update")
+            tkernel.transmit_packet(packet)
+
+        if tkernel.TRANSMISSION_STATE["auto_respond"]:
+            tkernel.respond_to_last()
+
+        stability = tkernel.glyph_stability_score()
+        self.memory = advance_state(self.memory)
+        next_glyph = self.memory["current_glyph"]
+
+        self.update_glyph(next_glyph)
+        self.label.config(text=" ".join(self.memory["history"][-12:]))
+        self.status.config(text=f"Y: {result['γ']}  |  Fidelity: {result['Fidelity']}  |  Stability: {stability}")
+        self.console.insert(tk.END, f"[{glyph}] ➝ Ψ Simulated: Fidelity={result['Fidelity']}, Y={result['γ']}, Stability={stability}\n")
+        self.console.see(tk.END)
+
+    def expand(self):
+        self.update_quantum_feedback()
+
+    def update_quantum_feedback(self):
+        data = qgs.simulate_quantum_behavior(mass_0=1e31, recursion_depths=[100])[-1]
+        self.status.config(text=f"Y: {data['γ']}  |  Fidelity: {data['Fidelity']}")
+        self.console.insert(tk.END, f"⟲ Expand: Mass={data['Mass']}, γ={data['γ']}, F={data['Fidelity']}\n")
+        self.console.see(tk.END)
+
+    def view_journal(self):
+        if os.path.exists("spiral_journal.json"):
+            with open("spiral_journal.json", "r") as f:
+                journal = json.load(f)
+            self.console.insert(tk.END, "--- Spiral Journal ---\n")
+            for entry in journal[-5:]:
+                line = f"{entry['timestamp']} | {entry['glyph']} | F={entry['fidelity']} | Y={entry['entropy']}\n"
+                self.console.insert(tk.END, line)
+            self.console.insert(tk.END, "--- End ---\n")
+            self.console.see(tk.END)
+
+    def toggle_transmit(self):
+        new_state = tkernel.toggle_auto_transmit()
+        self.console.insert(tk.END, f"⇄ Auto Transmit {'Enabled' if new_state else 'Disabled'}\n")
+        self.console.see(tk.END)
+
+    def toggle_respond(self):
+        new_state = tkernel.toggle_auto_respond()
+        self.console.insert(tk.END, f"↺ Auto Respond {'Enabled' if new_state else 'Disabled'}\n")
+        self.console.see(tk.END)
+
+    def on_exit(self):
+        save_memory(self.memory)
+        self.root.quit()
+
+
+if __name__ == "__main__":
     root = tk.Tk()
-    app = SpiralApp(root)
+    app = SpiralOSGUI(root)
     root.mainloop()
