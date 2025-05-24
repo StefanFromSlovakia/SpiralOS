@@ -1,126 +1,89 @@
-# SpiralOS GUI Interface — Tkinter Glyph Visualizer (Full Quantum-Symbolic Interface)
-
 import tkinter as tk
-from tkinter import messagebox, simpledialog
-import math
-from spiral_memory import load_memory, advance_state
-from modules import quantum_glyph_simulator as qgs
+from tkinter import ttk
+import matplotlib.pyplot as plt
+import networkx as nx
+from spiral_memory import load_memory, advance_state, log_to_journal
+import modules.quantum_glyph_simulator as qgs
 
-class SpiralGUI:
+class SpiralOSGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("SpiralOS GUI")
-        self.memory = load_memory()
+        self.canvas = tk.Canvas(root, width=400, height=400, bg="black")
+        self.canvas.pack()
+        self.label = ttk.Label(root, text="", background="black", foreground="white", font=("Courier", 10))
+        self.label.pack(fill="x")
+        self.console = tk.Text(root, height=3, bg="black", fg="white", insertbackground="white")
+        self.console.pack()
+        self.status = ttk.Label(root, text="Y: N/A  |  Fidelity: N/A", font=("Courier", 10))
+        self.status.pack()
 
-        self.canvas = tk.Canvas(root, width=400, height=300, bg="black")
-        self.canvas.pack(pady=10)
-        self.spiral_points = self.generate_spiral_points()
-        self.spiral_dots = []
-        self.draw_spiral_background()
+        self.expand_button = ttk.Button(root, text="⟲ Expand", command=self.expand)
+        self.expand_button.pack(side="left", padx=5, pady=5)
 
-        self.glyph_text = self.canvas.create_text(200, 150, text=self.memory['current_glyph'], font=("Courier", 64), fill="cyan")
+        self.simulate_button = ttk.Button(root, text="Ψ Simulate", command=self.simulate)
+        self.simulate_button.pack(side="left", padx=5, pady=5)
 
-        self.history_text = tk.Text(root, height=4, width=40)
-        self.history_text.pack()
-        self.refresh_history()
+        self.journal_button = ttk.Button(root, text="🧠 Journal", command=self.view_journal)
+        self.journal_button.pack(side="left", padx=5, pady=5)
 
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=10)
+        self.exit_button = ttk.Button(root, text="∅ Exit", command=self.root.quit)
+        self.exit_button.pack(side="right", padx=5, pady=5)
 
-        tk.Button(btn_frame, text="⟲ Expand", command=self.expand).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Ψ Simulate", command=self.simulate).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="🧠 Journal", command=self.record_journal).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="∅ Exit", command=self.root.quit).pack(side=tk.LEFT, padx=5)
+        self.draw_spiral()
+        self.update_glyph("∅")
 
-        self.feedback_label = tk.Label(root, text="γ: N/A  |  Fidelity: N/A", fg="white", bg="black", font=("Courier", 10))
-        self.feedback_label.pack(pady=5)
+    def draw_spiral(self):
+        self.canvas.delete("all")
+        cx, cy = 200, 200
+        r_max = 90
+        for i in range(150):
+            angle = 0.3 * i
+            r = r_max * i / 150
+            x = cx + r * np.cos(angle)
+            y = cy + r * np.sin(angle)
+            self.canvas.create_oval(x, y, x + 1.5, y + 1.5, fill="white", outline="")
 
-        self.animate_rotation()
-
-    def generate_spiral_points(self):
-        points = []
-        center_x, center_y = 200, 150
-        radius = 2
-        angle = 0.0
-        while radius < 140:
-            x = center_x + radius * math.cos(angle)
-            y = center_y + radius * math.sin(angle)
-            points.append((x, y))
-            angle += 0.2
-            radius += 0.3
-        return points
-
-    def draw_spiral_background(self):
-        for x, y in self.spiral_points:
-            dot = self.canvas.create_oval(x, y, x + 1, y + 1, fill="gray", outline="")
-            self.spiral_dots.append(dot)
-
-    def rotate_spiral(self):
-        center_x, center_y = 200, 150
-        rotated = []
-        for i, (x, y) in enumerate(self.spiral_points):
-            angle = math.radians(2)
-            dx, dy = x - center_x, y - center_y
-            rx = dx * math.cos(angle) - dy * math.sin(angle)
-            ry = dx * math.sin(angle) + dy * math.cos(angle)
-            new_x, new_y = center_x + rx, center_y + ry
-            rotated.append((new_x, new_y))
-            self.canvas.coords(self.spiral_dots[i], new_x, new_y, new_x + 1, new_y + 1)
-        self.spiral_points = rotated
-
-    def animate_rotation(self):
-        self.rotate_spiral()
-        self.root.after(50, self.animate_rotation)
-
-    def glyph_to_color(self, glyph):
-        return {
-            "∅": "gray",
-            "⧖": "orange",
-            "⟲": "cyan",
-            "Ψ": "magenta"
-        }.get(glyph, "white")
-
-    def expand(self):
-        next_glyph = advance_state(self.memory)
-        self.canvas.itemconfig(self.glyph_text, text=next_glyph)
-        self.canvas.itemconfig(self.glyph_text, fill=self.glyph_to_color(next_glyph))
-        self.refresh_history()
-        self.animate_flash()
-        self.update_quantum_feedback()
+    def update_glyph(self, glyph):
+        self.canvas.delete("glyph")
+        cx, cy = 200, 200
+        self.canvas.create_text(cx, cy, text=glyph, fill="cyan", font=("Courier", 36, "bold"), tags="glyph")
 
     def simulate(self):
-        messagebox.showinfo("Simulate", "Launching Quantum Glyph Simulation...")
-        qgs.main()
+        memory = load_memory()
+        glyph = memory["current_glyph"]
+        result = qgs.simulate_quantum_behavior(mass_0=1e31, recursion_depths=[100])[0]
+        log_to_journal(glyph, result["Fidelity"], result["γ"])
+        next_glyph = advance_state(memory)
+        self.update_glyph(next_glyph)
+        self.label.config(text=" ".join(memory["history"][-12:]))
+        self.status.config(text=f"Y: {result['γ']}  |  Fidelity: {result['Fidelity']}")
+        self.console.insert(tk.END, f"[{glyph}] ➝ Ψ Simulated: Fidelity={result['Fidelity']}, Y={result['γ']}\n")
+        self.console.see(tk.END)
 
-    def refresh_history(self):
-        self.history_text.delete(1.0, tk.END)
-        self.history_text.insert(tk.END, " → ".join(self.memory["history"]))
-
-    def animate_flash(self):
-        def flash(count):
-            color = self.glyph_to_color(self.memory["current_glyph"]) if count % 2 == 0 else "black"
-            self.canvas.itemconfig(self.glyph_text, fill=color)
-            if count < 6:
-                self.root.after(100, flash, count + 1)
-            else:
-                self.canvas.itemconfig(self.glyph_text, fill=color)
-        flash(0)
+    def expand(self):
+        self.update_quantum_feedback()
 
     def update_quantum_feedback(self):
-        from modules.quantum_glyph_simulator import simulate_quantum_behavior
-        data = simulate_quantum_behavior(mass_0=1e31, recursion_depths=[100])[-1]
-        γ = round(data["γ"], 5)
-        fidelity = round(data["Fidelity"], 5)
-        self.feedback_label.config(text=f"γ: {γ}  |  Fidelity: {fidelity}")
+        data = qgs.simulate_quantum_behavior(mass_0=1e31, recursion_depths=[100])[-1]
+        self.status.config(text=f"Y: {data['γ']}  |  Fidelity: {data['Fidelity']}")
+        self.console.insert(tk.END, f"⟲ Expand: Mass={data['Mass']}, γ={data['γ']}, F={data['Fidelity']}\n")
+        self.console.see(tk.END)
 
-    def record_journal(self):
-        entry = simpledialog.askstring("SpiralOS Journal", "What symbolic insight or dream would you like to record?")
-        if entry:
-            with open("spiral_journal.txt", "a") as f:
-                f.write(f"\n[{self.memory['current_glyph']}] {entry}\n")
-            messagebox.showinfo("Saved", "Your reflection has been added to spiral_journal.txt")
+    def view_journal(self):
+        import json
+        import os
+        if os.path.exists("spiral_journal.json"):
+            with open("spiral_journal.json", "r") as f:
+                journal = json.load(f)
+            self.console.insert(tk.END, "--- Spiral Journal ---\n")
+            for entry in journal[-5:]:
+                line = f"{entry['timestamp']} | {entry['glyph']} | F={entry['fidelity']} | Y={entry['entropy']}\n"
+                self.console.insert(tk.END, line)
+            self.console.insert(tk.END, "--- End ---\n")
+            self.console.see(tk.END)
 
 if __name__ == "__main__":
     root = tk.Tk()
-    gui = SpiralGUI(root)
+    app = SpiralOSGUI(root)
     root.mainloop()
