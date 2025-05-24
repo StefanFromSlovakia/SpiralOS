@@ -1,4 +1,4 @@
-# spiralos_gui.py — SpiralOS GUI with Transmission Integration + Sound Layer
+# spiralos_gui.py — SpiralOS GUI with Transmission, Animation, and Audio
 
 import tkinter as tk
 from tkinter import ttk
@@ -7,8 +7,8 @@ import numpy as np
 import networkx as nx
 import threading
 import time
-import pygame
-
+import os
+import simpleaudio as sa
 from spiral_memory import load_memory, advance_state, log_to_journal, save_memory
 import modules.quantum_glyph_simulator as qgs
 import transmission_kernel as tkernel
