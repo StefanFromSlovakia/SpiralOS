@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import matplotlib.pyplot as plt
+import numpy as np
 import networkx as nx
 from spiral_memory import load_memory, advance_state, log_to_journal
 import modules.quantum_glyph_simulator as qgs
