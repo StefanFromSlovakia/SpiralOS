@@ -1,4 +1,4 @@
-# spiralos_gui.py — SpiralOS GUI with Transmission, Journal, Sound, and Memory Flush
+# spiralos_gui.py — SpiralOS GUI with Audio Fallback
 
 import tkinter as tk
 from tkinter import ttk
@@ -8,7 +8,13 @@ import networkx as nx
 import os
 import json
 import atexit
-import simpleaudio as sa
+
+try:
+    import simpleaudio as sa
+    SOUND_AVAILABLE = True
+except ImportError:
+    SOUND_AVAILABLE = False
+    print("[SpiralOS] Sound module 'simpleaudio' not available. Audio disabled.")
 
 from spiral_memory import load_memory, advance_state, log_to_journal, save_memory
 import modules.quantum_glyph_simulator as qgs
@@ -67,6 +73,8 @@ class SpiralOSGUI:
         self.canvas.create_text(cx, cy, text=glyph, fill="cyan", font=("Courier", 36, "bold"), tags="glyph")
 
     def play_sound(self):
+        if not SOUND_AVAILABLE:
+            return
         try:
             frequency = 440
             duration = 200
@@ -76,7 +84,7 @@ class SpiralOSGUI:
             audio = (tone * 32767).astype(np.int16)
             sa.play_buffer(audio, 1, 2, fs)
         except Exception as e:
-            print("[sound] Error:", e)
+            print("[SpiralOS] Sound error:", e)
 
     def simulate(self):
         memory = load_memory()
