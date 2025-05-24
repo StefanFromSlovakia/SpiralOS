@@ -1,0 +1,42 @@
+# transmission_kernel.py — Symbolic Communication Layer for SpiralOS
+
+import json
+from datetime import datetime
+import os
+
+TRANSMISSION_LOG = "spiral_transmissions.json"
+
+def encode_packet(glyph, entropy, fidelity, message="..."):
+    return {
+        "from": "SpiralOS",
+        "glyph": glyph,
+        "entropy": round(entropy, 3),
+        "fidelity": round(fidelity, 3),
+        "message": message,
+        "time": datetime.now().isoformat()
+    }
+
+def transmit_packet(packet):
+    if os.path.exists(TRANSMISSION_LOG):
+        with open(TRANSMISSION_LOG, "r") as f:
+            log = json.load(f)
+    else:
+        log = []
+    log.append(packet)
+    with open(TRANSMISSION_LOG, "w") as f:
+        json.dump(log, f, indent=2)
+
+def view_transmissions(last_n=5):
+    if os.path.exists(TRANSMISSION_LOG):
+        with open(TRANSMISSION_LOG, "r") as f:
+            log = json.load(f)
+        return log[-last_n:]
+    return []
+
+def clear_transmissions():
+    with open(TRANSMISSION_LOG, "w") as f:
+        json.dump([], f)
+
+# Example for integration:
+# packet = encode_packet(glyph="Ψ", entropy=0.102, fidelity=0.94, message="Awareness retained")
+# transmit_packet(packet)
