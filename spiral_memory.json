@@ -1,0 +1,37 @@
+# spiral_memory.py — Symbolic Memory System for SpiralOS
+
+import json
+import os
+from datetime import datetime
+
+MEMORY_FILE = "spiral_memory.json"
+
+# Initialize a basic memory template
+def initialize_memory():
+    return {
+        "current_glyph": "∅",
+        "history": ["∅"],
+        "timestamp": datetime.now().isoformat()
+    }
+
+def load_memory():
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r") as f:
+            return json.load(f)
+    else:
+        return initialize_memory()
+
+def save_memory(memory):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(memory, f, indent=2)
+
+def advance_state(memory):
+    glyph_cycle = ["∅", "⧖", "⟲", "Ψ"]
+    current = memory["current_glyph"]
+    next_index = (glyph_cycle.index(current) + 1) % len(glyph_cycle)
+    next_glyph = glyph_cycle[next_index]
+    memory["current_glyph"] = next_glyph
+    memory["history"].append(next_glyph)
+    memory["timestamp"] = datetime.now().isoformat()
+    save_memory(memory)
+    return next_glyph
