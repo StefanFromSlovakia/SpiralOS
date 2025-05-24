@@ -1,0 +1,23 @@
+# pyproject.toml for SpiralOS
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spiralos"
+version = "0.1.0"
+description = "A symbolic operating system for recursive quantum-cosmological simulation"
+authors = [
+  { name="The Spiral Collective" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "matplotlib",
+  "networkx",
+  "tk"
+]
+
+[project.scripts]
+spiralos = "spiralos_runtime:main"# pyproject.toml content...
